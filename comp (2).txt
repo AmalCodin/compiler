@@ -1,0 +1,2243 @@
+Experiment-1 : Implementation of Deterministic Finite Automaton (DFA) from regular grammar using C language.
+Code :
+#include <stdio.h>
+#include <string.h>
+#include <stdbool.h>
+void DFA(char word[])
+{
+int dfa[4][2] = {
+{1,3},
+{1,2},
+{3,2},
+{3,3}
+};
+int len = strlen(word);
+int currentState = 0;
+int nextState;
+for(int i=0;i<len;i++)
+{
+int n;
+if (word[i] == 'a')
+{
+n = 0;
+}
+else if (word[i] == 'b')
+{
+n = 1;
+}
+else
+{
+currentState = 3;
+break;
+}
+nextState = dfa[currentState][n];
+currentState = nextState;
+if (currentState == 3)
+break;
+}
+if (currentState == 2)
+{
+printf("accepted \n");
+}
+else
+{
+printf("not accepted \n");
+}
+}
+void printTransitionTable()
+{
+printf("Transition Table:\n");
+printf("State\\Input | a | b |\n");
+printf("------------|---|---|\n");
+printf(" 0 | 1 | 3 |\n");
+printf(" 1 | 1 | 2 |\n");
+printf(" 2 | 3 | 2 |\n");
+printf(" 3 | 3 | 3 |\n");
+}
+int main()
+{
+char word[99];
+int choice;
+while (true)
+{
+printf("Enter your choice: \n 1 for entering the DFA \n 2 for printing the transition table \n 3 for testing a string against the given DFA \n 4 for exit \n");
+scanf("%d",&choice);
+if (choice == 4)
+{
+break;
+}
+else if (choice==3)
+{
+printf("Enter your string to be tested: \n");
+scanf("%s",word);
+DFA(word);
+}
+else if (choice == 2)
+{
+printTransitionTable();
+}
+else if (choice == 1)
+{
+continue;
+}
+else
+{
+printf("invalid choice");
+}
+}
+return 0;
+}
+****************************************************************************************************************************************************************************************************************************************************************************
+Experiment-2 Implementation of Deterministic Finite Automaton (DFA) from Non-deterministic Finite Automata (NFA) without ε-edges using C language.
+Code –
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <string.h>
+#define MAX_NFA_STATES 10
+#define MAX_SYMBOLS 10
+#define MAX_TRANS_PER_CELL 10
+#define MAX_DFA_STATES 1024 // 2^(max nfa states)
+// Global tables for the NFA transitions.
+// For each state and input symbol, we keep an array of destination states.
+int nfa_transitions[MAX_NFA_STATES][MAX_SYMBOLS][MAX_TRANS_PER_CELL];
+int nfa_trans_count[MAX_NFA_STATES][MAX_SYMBOLS]; // number of transitions for each cell
+// Array to mark which NFA states are final.
+bool nfa_final[MAX_NFA_STATES];
+// A simple queue structure for DFA states (each state is represented as an int bitmask).
+typedef struct {
+int items[MAX_DFA_STATES];
+int front;
+int rear;
+} Queue;
+void initQueue(Queue *q) {
+q->front = 0;
+q->rear = 0;
+}
+bool isQueueEmpty(Queue *q) {
+return q->front == q->rear;
+}
+void enqueue(Queue *q, int value) {
+if(q->rear < MAX_DFA_STATES) {
+q->items[q->rear++] = value;
+}
+}
+int dequeue(Queue *q) {
+return q->items[q->front++];
+}
+bool isFinalDFAState(int dfa_state, int nfa_state_count) {
+// A DFA state (a set of NFA states, represented as a bitmask)
+// is final if at least one of the NFA states is final.
+for (int i = 0; i < nfa_state_count; i++) {
+if (dfa_state & (1 << i)) {
+// if NFA state i is in the set and it is final
+if (nfa_final[i]) {
+return true;
+}
+}
+}
+return false;
+}
+int main(void) {
+int nfa_states, nfa_syms;
+int start_state;
+int num_final;
+int num_transitions;
+int i, j, k;
+printf("Enter number of states in NFA: ");
+scanf("%d", &nfa_states);
+printf("Enter number of symbols in NFA: ");
+scanf("%d", &nfa_syms);
+printf("Enter start state of NFA (0 to %d): ", nfa_states - 1);
+scanf("%d", &start_state);
+// Initialize NFA final state table.
+for (i = 0; i < nfa_states; i++) {
+nfa_final[i] = false;
+}
+printf("Enter number of final states in NFA: ");
+scanf("%d", &num_final);
+printf("Enter final state(s) (each between 0 and %d):\n", nfa_states - 1);
+for (i = 0; i < num_final; i++) {
+int fs;
+scanf("%d", &fs);
+if(fs >= 0 && fs < nfa_states)
+nfa_final[fs] = true;
+}
+// Initialize transition counts to zero.
+for(i = 0; i < nfa_states; i++) {
+for(j = 0; j < nfa_syms; j++) {
+nfa_trans_count[i][j] = 0;
+}
+}
+printf("Enter number of transitions in NFA: ");
+scanf("%d", &num_transitions);
+printf("Enter transitions (source symbol destination):\n");
+for(i = 0; i < num_transitions; i++){
+int src, sym, dest;
+scanf("%d %d %d", &src, &sym, &dest);
+if(src < 0 || src >= nfa_states || sym < 0 || sym >= nfa_syms) {
+printf("Invalid transition. Exiting.\n");
+exit(1);
+}
+int pos = nfa_trans_count[src][sym];
+if(pos >= MAX_TRANS_PER_CELL) {
+printf("Too many transitions from state %d on symbol %d.\n", src, sym);
+exit(1);
+}
+nfa_transitions[src][sym][pos] = dest;
+nfa_trans_count[src][sym]++;
+}
+// DFA conversion using subset construction.
+// Each DFA state is a set of NFA states represented as a bit mask (an int).
+// dfa_states[i] is the bitmask for DFA state i.
+int dfa_states[MAX_DFA_STATES];
+// dfa_transitions[state][symbol] = destination state index in DFA.
+int dfa_transitions[MAX_DFA_STATES][MAX_SYMBOLS];
+// Mapping from bitmask to DFA state index; -1 means not assigned.
+int state_mapping[1 << MAX_NFA_STATES];
+for(i = 0; i < (1 << MAX_NFA_STATES); i++) {
+state_mapping[i] = -1;
+}
+int dfa_state_count = 0;
+// Start state for DFA is the set containing only the NFA start state.
+int start_bitmask = (1 << start_state);
+dfa_states[dfa_state_count] = start_bitmask;
+state_mapping[start_bitmask] = dfa_state_count;
+dfa_state_count++;
+Queue queue;
+initQueue(&queue);
+enqueue(&queue, start_bitmask);
+// Process each DFA state.
+while(!isQueueEmpty(&queue)) {
+int current = dequeue(&queue);
+int current_index = state_mapping[current];
+// For each input symbol, compute the destination set.
+for (int sym = 0; sym < nfa_syms; sym++) {
+int next_set = 0;
+// For each NFA state in current set:
+for (int nfa_state = 0; nfa_state < nfa_states; nfa_state++) {
+if (current & (1 << nfa_state)) {
+// For this state and symbol, add all reachable states.
+for (int t = 0; t < nfa_trans_count[nfa_state][sym]; t++) {
+int dest = nfa_transitions[nfa_state][sym][t];
+next_set |= (1 << dest);
+}
+}
+}
+// Save the DFA transition.
+if(next_set == 0) {
+// No transitions: use -1 to indicate a dead end.
+dfa_transitions[current_index][sym] = -1;
+} else {
+// If this set is new, add it.
+if(state_mapping[next_set] == -1) {
+state_mapping[next_set] = dfa_state_count;
+dfa_states[dfa_state_count] = next_set;
+enqueue(&queue, next_set);
+dfa_transitions[current_index][sym] = dfa_state_count;
+dfa_state_count++;
+} else {
+dfa_transitions[current_index][sym] = state_mapping[next_set];
+}
+}
+}
+}
+// Print the DFA.
+printf("\nDFA has %d states.\n", dfa_state_count);
+for(i = 0; i < dfa_state_count; i++) {
+printf("DFA State %d: {", i);
+bool first = true;
+for(j = 0; j < nfa_states; j++){
+if(dfa_states[i] & (1 << j)){
+if(!first) {
+printf(", ");
+}
+printf("%d", j);
+first = false;
+}
+}
+printf("}");
+if(isFinalDFAState(dfa_states[i], nfa_states))
+printf(" (final)");
+printf("\n");
+}
+printf("\nDFA Transition Table:\n");
+for(i = 0; i < dfa_state_count; i++){
+for(j = 0; j < nfa_syms; j++){
+printf("From state %d on symbol %d -> ", i, j);
+int dest = dfa_transitions[i][j];
+if(dest == -1)
+printf("Dead State");
+else
+printf("State %d", dest);
+printf("\n");
+}
+}
+return 0;
+}
+****************************************************************************************************************************************************************************************************************************************************************************
+Experiment-3 :
+a) Implement a DFA in LEX code which accepts Odd number of 1’s and even number of 0’s.
+b) Implement a DFA in LEX code which accepts strings over {0, 1, 2} having 231 as substring.
+Code :
+a)
+%{
+#include <stdio.h>
+%}
+%s A B C DEAD
+%%
+
+<INITIAL>1 BEGIN A;
+<INITIAL>0 BEGIN B;
+<INITIAL>[^01\n] BEGIN DEAD;
+<INITIAL>\n BEGIN INITIAL; printf("Not Accepted\n");
+
+<A>1 BEGIN INITIAL;
+<A>0 BEGIN C;
+<A>[^01\n] BEGIN DEAD;
+<A>\n BEGIN INITIAL; printf("Accepted\n");
+
+<B>1 BEGIN C;
+<B>0 BEGIN INITIAL;
+<B>[^01\n] BEGIN DEAD;
+<B>\n BEGIN INITIAL; printf("Not Accepted\n");
+
+<C>1 BEGIN B;
+<C>0 BEGIN A;
+<C>[^01\n] BEGIN DEAD;
+<C>\n BEGIN INITIAL; printf("Not Accepted\n");
+
+<DEAD>[^\n] BEGIN DEAD;
+<DEAD>\n BEGIN INITIAL; printf("Invalid\n");
+
+%%
+
+int yywrap() {
+    return 1;  // Indicate end of input
+}
+
+int main() {
+    printf("Enter String\n");
+    yylex();  // Start lexical analysis
+    return 0;
+}
+
+b) 
+%{
+#include <stdio.h>
+%}
+
+%s A B C DEAD
+
+%%
+
+<INITIAL>1 BEGIN INITIAL;
+<INITIAL>3 BEGIN INITIAL;
+<INITIAL>2 BEGIN A;
+<INITIAL>[^123\n] BEGIN DEAD;
+<INITIAL>\n { printf("Not Accepted\n"); BEGIN INITIAL; }
+
+<A>2 BEGIN A;
+<A>3 BEGIN B;
+<A>1 BEGIN INITIAL;
+<A>[^123\n] BEGIN DEAD;
+<A>\n { printf("Not Accepted\n"); BEGIN INITIAL; }
+
+<B>1 BEGIN C;
+<B>2 BEGIN A;
+<B>3 BEGIN INITIAL;
+<B>[^123\n] BEGIN DEAD;
+<B>\n { printf("Not Accepted\n"); BEGIN INITIAL; }
+
+<C>1 BEGIN C;
+<C>2 BEGIN C;
+<C>3 BEGIN C;
+<C>[^123\n] BEGIN DEAD;
+<C>\n { printf("Accepted\n"); BEGIN INITIAL; }
+
+<DEAD>[^\n] BEGIN DEAD;
+<DEAD>\n { printf("Invalid\n"); BEGIN INITIAL; }
+
+%%
+
+int yywrap() {
+    return 1; // Required for Lex to compile
+}
+
+int main() {
+    printf("Enter String:\n");
+    yylex();
+    return 0;
+}
+****************************************************************************************************************************************************************************************************************************************************************************
+
+
+EXPERIMENT 1 - Construct a lexical analyzer
+Identify the tokens from simple statement as input stored in a linear array
+Identify the tokens from small program (not exceeding 5 lines) as input stored in a text file
+Identify the tokens from small program (not exceeding 5 lines) as input get it from the user and store it in a text file
+CODE –
+#include <iostream>
+#include <fstream>
+#include <cstdlib>
+#include <cstring>
+#include <cctype>
+using namespace std;
+string keywords[] = {"auto", "break", "case", "char", "const", "continue", "default",
+"do", "double", "else", "enum", "extern", "float", "for", "goto",
+"if", "int", "long", "register", "return", "short", "signed",
+"sizeof", "static", "struct", "switch", "typedef", "union",
+"unsigned", "void", "volatile", "while"};
+char operators[] = "+-*/%=<>!&|^";
+bool isKeyword(const string &word) {
+for (const string &kw : keywords) {
+if (word == kw) return true;
+}
+return false;
+}
+void tokenize(const string &input) {
+string token;
+for (size_t i = 0; i < input.length(); i++) {
+char ch = input[i];
+if (strchr(operators, ch)) {
+cout << ch << " is an operator\n";
+}
+else if (isalnum(ch)) {
+token += ch;
+}
+else {
+if (!token.empty()) {
+if (isKeyword(token)) cout << token << " is a keyword\n";
+else if (isdigit(token[0])) cout << token << " is a number\n";
+else cout << token << " is an identifier\n";
+token.clear();
+}
+}
+}
+}
+void case1() {
+string statement = "int a = 5 + 10;";
+cout << "\n Case 1: Tokenizing a Simple Statement\n";
+tokenize(statement);
+}
+void case2() {
+ifstream fin("program.txt");
+if (!fin) {
+cout << "Error opening program.txt file!\n";
+return;
+}
+cout << "\n Case 2: Tokenizing a Small Program from File\n";
+string line, content;
+while (getline(fin, line)) {
+content += line + " ";
+}
+fin.close();
+tokenize(content);
+}
+void case3() {
+ofstream fout("user_program.txt");
+cout << "\nEnter a small program (max 5 lines). Type 'END' to stop:\n";
+string line;
+int line_count = 0;
+while (line_count < 5) {
+getline(cin, line);
+if (line == "END") break;
+fout << line << endl;
+line_count++;
+}
+fout.close();
+ifstream fin("user_program.txt");
+if (!fin) {
+cout << "Error opening user_program.txt file!\n";
+return;
+}
+cout << "\n Case 3: Tokenizing a Small Program from User Input\n";
+string content;
+while (getline(fin, line)) {
+content += line + " ";
+}
+fin.close();
+tokenize(content);
+}
+int main() {
+case1();
+// case2();
+// case3();
+return 0;
+}
+****************************************************************************************************************************************************************************************************************************************************************************
+EXPERIMENT 2 - Construct a lexical analyzer using LEX tool.
+CODE –
+%{
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+void printToken(const char* type, const char* value) {
+    printf("%s: %s\n", type, value);
+}
+%}
+
+%%
+
+"int"      { printToken("Keyword", yytext); }
+"float"    { printToken("Keyword", yytext); }
+"if"       { printToken("Keyword", yytext); }
+"else"     { printToken("Keyword", yytext); }
+"return"   { printToken("Keyword", yytext); }
+
+[0-9]+     { printToken("Integer", yytext); }
+[0-9]*\.[0-9]+ { printToken("Real Number", yytext); }  // Improved floating-point handling
+[0-9]+\.[0-9]* { printToken("Real Number", yytext); }
+
+"+"        { printToken("Operator", yytext); }
+"-"        { printToken("Operator", yytext); }
+"*"        { printToken("Operator", yytext); }
+"/"        { printToken("Operator", yytext); }
+"="        { printToken("Operator", yytext); }
+
+[a-zA-Z_][a-zA-Z0-9_]* { printToken("Identifier", yytext); }
+
+"("        { printToken("Delimiter", yytext); }
+")"        { printToken("Delimiter", yytext); }
+"{"        { printToken("Delimiter", yytext); }
+"}"        { printToken("Delimiter", yytext); }
+";"        { printToken("Delimiter", yytext); }
+","        { printToken("Delimiter", yytext); }
+
+[ \t\n\r]+   { /* Skip whitespace */ }
+
+.          { printf("Unknown character: %s\n", yytext); }  // Handle unrecognized characters
+
+%%
+
+// Required for Lex to compile properly
+int yywrap() {
+    return 1;
+}
+
+int main() {
+    printf("Enter the program to tokenize (Ctrl+D to end input):\n");
+    yylex();
+    return 0;
+}
+****************************************************************************************************************************************************************************************************************************************************************************
+EXPERIMENT 3 - Construct Predictive parse table using C language. Hint: Consider the input grammar without left recursion, find FIRST and FOLLOW for each non-terminal and then construct the parse table.
+#include <iostream>
+#include <vector>
+#include <string>
+#include <set>
+#include <map>
+#include <stack>
+#include <iomanip>
+#include <algorithm>
+using namespace std;
+string center(const string& str, int width) {
+int len = str.length();
+if(width < len) return str;
+int diff = width - len;
+int pad1 = diff/2;
+int pad2 = diff - pad1;
+return string(pad1, ' ') + str + string(pad2, ' ');
+}
+set<char> first(vector<set<char> > &firstprod, vector<string> prod, char ch, map<char,int> nontermap, map<char,int> termap) {
+int ind = 0;
+if(nontermap.find(ch) == nontermap.end())
+ind += nontermap.size();
+else
+ind += nontermap[ch];
+if(termap.find(ch) != termap.end())
+ind += termap[ch];
+if(firstprod[ind].size() != 0)
+return firstprod[ind];
+if(ind >= nontermap.size()) {
+firstprod[ind].insert(ch);
+return firstprod[ind];
+}
+for(int i = 0; i < prod.size(); ++i) {
+if(prod[i][0] == ch) {
+int j;
+for(j = 3; j < prod[i].length(); ++j) {
+set<char> temp = first(firstprod, prod, prod[i][j], nontermap, termap);
+if(temp.find('^') == temp.end()) {
+firstprod[ind].insert(temp.begin(), temp.end());
+break;
+}
+else {
+temp.erase('^');
+firstprod[ind].insert(temp.begin(), temp.end());
+continue;
+}
+}
+if(j == prod[i].length())
+firstprod[ind].insert('^');
+}
+}
+return firstprod[ind];
+}
+set<char> follow(vector<set<char> > &followprod, vector<set<char> > &firstprod, vector<string> prod, char ch, map<char,int> nontermap, map<char,int> termap) {
+int ind = nontermap[ch];
+if(followprod[ind].size() != 0)
+return followprod[ind];
+if(ind == 0)
+followprod[0].insert('$');
+for(int i = 0; i < prod.size(); ++i) {
+for(int j = 3; j < prod[i].length(); ++j) {
+if(prod[i][j] == ch) {
+int k;
+for(k = j + 1; k < prod[i].length(); ++k) {
+int ind2 = 0;
+if(nontermap.find(prod[i][k]) == nontermap.end())
+ind2 += nontermap.size();
+else
+ind2 += nontermap[prod[i][k]];
+if(termap.find(prod[i][k]) != termap.end())
+ind2 += termap[prod[i][k]];
+set<char> temp = firstprod[ind2];
+if(temp.find('^') == temp.end()) {
+followprod[ind].insert(temp.begin(), temp.end());
+break;
+}
+else {
+temp.erase('^');
+followprod[ind].insert(temp.begin(), temp.end());
+continue;
+}
+}
+if(k == prod[i].length()) {
+set<char> temp = follow(followprod, firstprod, prod, prod[i][0], nontermap, termap);
+followprod[ind].insert(temp.begin(), temp.end());
+}
+}
+}
+}
+return followprod[ind];
+}
+void ll1tab(vector<vector<int> > &ll1table, vector<set<char> > &followprod, vector<set<char> > &firstprod, vector<string> prod, map<char,int> nontermap, map<char,int> termap) {
+int t = termap.size();
+for(int i = 0; i < prod.size(); ++i) {
+set<char> tempfirst;
+int j;
+for(j = 3; j < prod[i].length(); ++j) {
+int ind2 = 0;
+if(nontermap.find(prod[i][j]) == nontermap.end())
+ind2 += nontermap.size();
+else
+ind2 += nontermap[prod[i][j]];
+if(termap.find(prod[i][j]) != termap.end())
+ind2 += termap[prod[i][j]];
+set<char> temp = firstprod[ind2];
+if(temp.find('^') == temp.end()) {
+tempfirst.insert(temp.begin(), temp.end());
+break;
+}
+else {
+temp.erase('^');
+tempfirst.insert(temp.begin(), temp.end());
+continue;
+}
+}
+if(j == prod[i].length())
+tempfirst.insert('^');
+int k = 0;
+for(auto ch : tempfirst) {
+if(ch == '^') {
+k = 1;
+continue;
+}
+int y = termap[ch];
+int x = nontermap[prod[i][0]];
+ll1table[x][y] = i;
+}
+if(k == 1) {
+int ind2 = nontermap[prod[i][0]];
+set<char> tempfollow = followprod[ind2];
+for(auto ch : tempfollow) {
+if(ch == '$') {
+int y = t - 1;
+int x = nontermap[prod[i][0]];
+ll1table[x][y] = i;
+continue;
+}
+else {
+int y = termap[ch];
+int x = nontermap[prod[i][0]];
+ll1table[x][y] = i;
+}
+}
+}
+}
+}
+void displayParseTable(const vector<vector<int>>& ll1table, const vector<char>& nonter, const vector<char>& ter, const vector<string>& prod) {
+int n = ll1table.size();
+int t = ll1table[0].size();
+int maxWidth = 10;
+for(const string& p : prod) {
+maxWidth = max(maxWidth, (int)p.length());
+}
+cout << setw(10) << left << "N/T";
+for(int j = 0; j < t-1; j++) {
+cout << "|" << setw(maxWidth) << center(string(1, ter[j]), maxWidth);
+}
+cout << "|" << setw(maxWidth) << center("$", maxWidth) << endl;
+cout << string(10 + (maxWidth + 1) * t, '-') << endl;
+for(int i = 0; i < n; i++) {
+cout << setw(10) << left << nonter[i];
+for(int j = 0; j < t; j++) {
+cout << "|";
+if(ll1table[i][j] != -1) {
+cout << setw(maxWidth) << center(prod[ll1table[i][j]], maxWidth);
+} else {
+cout << setw(maxWidth) << center("-", maxWidth);
+}
+}
+cout << endl;
+cout << string(10 + (maxWidth + 1) * t, '-') << endl;
+}
+}
+int main() {
+int n;
+cout << "\nEnter number of non terminals: ";
+cin >> n;
+vector<char> nonter(n);
+map<char,int> nontermap;
+cout << "\nEnter non terminals one by one: ";
+for(int i = 0; i < n; ++i) {
+cin >> nonter[i];
+nontermap[nonter[i]] = i;
+}
+int t;
+cout << "\nEnter number of terminals: ";
+cin >> t;
+vector<char> ter(t);
+map<char,int> termap;
+cout << "\nEnter terminals one by one: ";
+for(int i = 0; i < t; ++i) {
+cin >> ter[i];
+termap[ter[i]] = i;
+}
+ter.push_back('^');
+++t;
+termap['^'] = t-1;
+cout << "\nEnter number of productions: ";
+int p;
+cin >> p;
+vector<string> prod(p);
+cout << "\nEnter productions one by one (in the form A->B): ";
+for(int i = 0; i < p; ++i) {
+cout << "\nProduction " << i+1 << ": ";
+cin >> prod[i];
+}
+vector<set<char>> firstprod(n+t);
+for(int i = 0; i < t; ++i)
+first(firstprod, prod, ter[i], nontermap, termap);
+for(int i = 0; i < n; ++i)
+first(firstprod, prod, nonter[i], nontermap, termap);
+cout << "\nFIRST Sets:" << endl;
+for(int i = 0; i < n; ++i) {
+cout << "First(" << nonter[i] << ") = {";
+bool first = true;
+for(char ch : firstprod[i]) {
+if(!first) cout << ", ";
+cout << ch;
+first = false;
+}
+cout << "}" << endl;
+}
+vector<set<char>> followprod(n);
+for(int i = 0; i < n; ++i)
+follow(followprod, firstprod, prod, nonter[i], nontermap, termap);
+cout << "\nFOLLOW Sets:" << endl;
+for(int i = 0; i < n; ++i) {
+cout << "Follow(" << nonter[i] << ") = {";
+bool first = true;
+for(char ch : followprod[i]) {
+if(!first) cout << ", ";
+cout << ch;
+first = false;
+}
+cout << "}" << endl;
+}
+vector<vector<int>> ll1table(n, vector<int>(t, -1));
+ll1tab(ll1table, followprod, firstprod, prod, nontermap, termap);
+cout << "\nLL(1) Parsing Table:" << endl;
+displayParseTable(ll1table, nonter, ter, prod);
+return 0;
+}
+****************************************************************************************************************************************************************************************************************************************************************************
+EXPERIMENT 4 – Implement the Predictive parsing algorithm, get parse table and input string is inputs. Use C language for implementation
+CODE –
+#include <iostream>
+#include <string>
+#include <deque>
+#include <iomanip>
+
+using namespace std;
+
+int getPosition(string arr[], string q, int size) {
+    for (int i = 0; i < size; i++) {
+        if (q == arr[i])
+            return i;
+    }
+    return -1;
+}
+
+int main() {
+    string nonterms[10], terms[10];
+    string pp_table[20][20];
+    int n1, n2;
+
+    cout << "Enter the number of Non-Terminals: ";
+    cin >> n1;
+    cin.ignore();
+
+    cout << "Enter the Non-Terminals:" << endl;
+    for (int i = 0; i < n1; i++) {
+        cout << "Non-Terminal " << i + 1 << ": ";
+        getline(cin, nonterms[i]);
+    }
+
+    cout << "\nEnter the number of Terminals: ";
+    cin >> n2;
+    cin.ignore();
+
+    cout << "Enter the Terminals:" << endl;
+    for (int i = 0; i < n2; i++) {
+        cout << "Terminal " << i + 1 << ": ";
+        getline(cin, terms[i]);
+    }
+
+    terms[n2] = "$"; // Add end-of-input marker
+    n2++;
+
+    cout << "\nEnter the parsing table entries:" << endl;
+    cout << "Enter the production rule or press enter for an empty cell" << endl;
+    cout << "Use # for epsilon" << endl;
+
+    for (int i = 0; i < n1; i++) {
+        for (int j = 0; j < n2; j++) {
+            cout << "Entry for [" << nonterms[i] << "," << terms[j] << "]: ";
+            getline(cin, pp_table[i][j]);
+        }
+    }
+
+    // Display Parsing Table
+    cout << "\nParsing Table:" << endl;
+    cout << setw(8) << " ";
+    for (int j = 0; j < n2; j++) {
+        cout << setw(15) << terms[j];
+    }
+    cout << endl;
+    for (int i = 0; i < n1; i++) {
+        cout << setw(8) << nonterms[i];
+        for (int j = 0; j < n2; j++) {
+            cout << setw(15) << pp_table[i][j];
+        }
+        cout << endl;
+    }
+
+    char continue_parsing;
+    do {
+        string input_string;
+        deque<string> parse_stack;
+        parse_stack.push_front("$");
+        parse_stack.push_front(nonterms[0]); // Start symbol
+
+        cout << "\nEnter the string to be parsed: ";
+        getline(cin, input_string);
+        input_string.push_back('$'); // Append end marker
+
+        cout << "\nParsing Steps:" << endl;
+        cout << setw(20) << left << "Stack" << setw(20) << "Input" << "Action" << endl;
+        cout << string(60, '-') << endl;
+
+        while (true) {
+            string stack_content = "";
+            for (const auto &elem : parse_stack) {
+                stack_content += elem;
+            }
+            cout << setw(20) << left << stack_content;
+            cout << setw(20) << left << input_string;
+
+            string action = "";
+
+            int row = getPosition(nonterms, parse_stack.front(), n1);
+            int column = getPosition(terms, input_string.substr(0, 1), n2);
+
+            if (row != -1 && column != -1) { // Non-terminal on stack
+                string production = pp_table[row][column];
+                if (production.empty()) {
+                    cout << "Error: No production rule found." << endl;
+                    break;
+                }
+
+                action = nonterms[row] + " -> " + production;
+                parse_stack.pop_front();
+
+                if (production != "#") { // If not epsilon
+                    for (int x = production.length() - 1; x >= 0; x--) {
+                        parse_stack.push_front(production.substr(x, 1));
+                    }
+                }
+            } else {
+                if (input_string.substr(0, 1) == parse_stack.front()) { // Matching terminal
+                    if (parse_stack.front() == "$") { // Accept case
+                        cout << "Accept" << endl;
+                        cout << "\nString successfully parsed!" << endl;
+                        break;
+                    }
+                    cout << "Match " << input_string[0];
+                    parse_stack.pop_front();
+                    input_string = input_string.substr(1);
+                } else {
+                    cout << "Error: Terminal mismatch" << endl;
+                    break;
+                }
+            }
+            cout << setw(20) << left << action << endl;
+        }
+
+        cout << "\nDo you want to parse another string? (y/n): ";
+        cin >> continue_parsing;
+        cin.ignore();
+
+    } while (continue_parsing == 'y' || continue_parsing == 'Y');
+
+    return 0;
+}
+****************************************************************************************************************************************************************************************************************************************************************************
+a) Construct Simple LR (SLR) parse table using C language.
+b) Implement the LR parsing algorithm, get both parse table
+and input string are inputs. Use C language for
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+
+#define MAX_RULES 10
+#define MAX_SYMBOLS 10
+#define MAX_STATES 20
+#define MAX_ITEMS 50
+#define STATES 11
+#define SYMBOLS 9
+#define COL_WIDTH 8
+
+typedef struct {
+    char lhs;
+    char rhs[10];
+} Production;
+
+typedef struct {
+    char lhs;
+    char rhs[10];
+    int dotPos;
+} Item;
+
+typedef struct {
+    Item items[MAX_ITEMS];
+    int count;
+} State;
+
+Production grammar[MAX_RULES];
+int numRules = 6;
+char terminals[MAX_SYMBOLS] = "+*()a$";
+char nonTerminals[MAX_SYMBOLS] = "ETF";
+State states[MAX_STATES];
+int numStates = 0;
+int parseTable[MAX_STATES][MAX_SYMBOLS * 2];  // Adjusted for terminals & non-terminals
+char headers[MAX_SYMBOLS * 2] = "+*()a$ETF";  // Headers for parsing table
+
+void initializeGrammar() {
+    grammar[0] = (Production){'E', "E+T"};
+    grammar[1] = (Production){'E', "T"};
+    grammar[2] = (Production){'T', "T*F"};
+    grammar[3] = (Production){'T', "F"};
+    grammar[4] = (Production){'F', "(E)"};
+    grammar[5] = (Production){'F', "a"};
+}
+
+int isTerminal(char c) {
+    return strchr(terminals, c) != NULL;
+}
+
+int isNonTerminal(char c) {
+    return strchr(nonTerminals, c) != NULL;
+}
+
+void addItem(State *state, char lhs, char *rhs, int dotPos) {
+    for (int i = 0; i < state->count; i++) {
+        if (state->items[i].lhs == lhs && strcmp(state->items[i].rhs, rhs) == 0 &&
+            state->items[i].dotPos == dotPos) {
+            return;
+        }
+    }
+    state->items[state->count].lhs = lhs;
+    strcpy(state->items[state->count].rhs, rhs);
+    state->items[state->count].dotPos = dotPos;
+    state->count++;
+}
+
+void closure(State *state) {
+    int added = 1;
+    while (added) {
+        added = 0;
+        for (int i = 0; i < state->count; i++) {
+            Item item = state->items[i];
+            if (item.dotPos < strlen(item.rhs)) {
+                char nextSymbol = item.rhs[item.dotPos];
+                if (isNonTerminal(nextSymbol)) {
+                    for (int j = 0; j < numRules; j++) {
+                        if (grammar[j].lhs == nextSymbol) {
+                            int before = state->count;
+                            addItem(state, grammar[j].lhs, grammar[j].rhs, 0);
+                            if (state->count > before) {
+                                added = 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+int findState(State *state) {
+    for (int i = 0; i < numStates; i++) {
+        if (states[i].count == state->count) {
+            int found = 1;
+            for (int j = 0; j < state->count; j++) {
+                if (states[i].items[j].lhs != state->items[j].lhs ||
+                    strcmp(states[i].items[j].rhs, state->items[j].rhs) != 0 ||
+                    states[i].items[j].dotPos != state->items[j].dotPos) {
+                    found = 0;
+                    break;
+                }
+            }
+            if (found) return i;
+        }
+    }
+    return -1;
+}
+
+int addState(State *state) {
+    int existing = findState(state);
+    if (existing != -1) return existing;
+    states[numStates] = *state;
+    return numStates++;
+}
+
+void computeCanonicalCollection() {
+    State startState;
+    startState.count = 0;
+    addItem(&startState, 'E', "E+T", 0);
+    closure(&startState);
+    addState(&startState);
+
+    for (int i = 0; i < numStates; i++) {
+        for (int j = 0; j < strlen(terminals) + strlen(nonTerminals); j++) {
+            char symbol = j < strlen(terminals) ? terminals[j] : nonTerminals[j - strlen(terminals)];
+            State nextState;
+            nextState.count = 0;
+
+            for (int k = 0; k < states[i].count; k++) {
+                Item item = states[i].items[k];
+                if (item.dotPos < strlen(item.rhs) && item.rhs[item.dotPos] == symbol) {
+                    addItem(&nextState, item.lhs, item.rhs, item.dotPos + 1);
+                }
+            }
+
+            if (nextState.count > 0) {
+                closure(&nextState);
+                int nextStateIndex = addState(&nextState);
+                parseTable[i][j] = nextStateIndex;
+            } else {
+                parseTable[i][j] = -1; // Marking empty transitions
+            }
+        }
+    }
+}
+
+void printStates() {
+    printf("\nCanonical Collection of LR(0) Items:\n");
+    for (int i = 0; i < numStates; i++) {
+        printf("\nState %d:\n", i);
+        for (int j = 0; j < states[i].count; j++) {
+            printf(" %c -> ", states[i].items[j].lhs);
+            for (int k = 0; k < strlen(states[i].items[j].rhs); k++) {
+                if (k == states[i].items[j].dotPos) printf(".");
+                printf("%c", states[i].items[j].rhs[k]);
+            }
+            if (states[i].items[j].dotPos == strlen(states[i].items[j].rhs))
+                printf(".");
+            printf("\n");
+        }
+    }
+}
+
+void printParseTable() {
+    printf("\nParse Table:\n");
+
+    // Print headers
+    printf("%-*s", COL_WIDTH, "State");
+    for (int i = 0; i < SYMBOLS * 2; i++) {
+        printf("%-*c", COL_WIDTH, headers[i]);
+    }
+    printf("\n");
+
+    // Print table rows
+    for (int i = 0; i < numStates; i++) {
+        printf("%-*d", COL_WIDTH, i);
+        for (int j = 0; j < SYMBOLS * 2; j++) {
+            if (parseTable[i][j] != -1) {
+                printf("%-*d", COL_WIDTH, parseTable[i][j]);
+            } else {
+                printf("%-*s", COL_WIDTH, "-");
+            }
+        }
+        printf("\n");
+    }
+}
+
+int main() {
+    initializeGrammar();
+    computeCanonicalCollection();
+    printStates();
+    printParseTable();
+    return 0;
+}
+****************************************************************************************************************************************************************************************************************************************************************************
+Experiment2: Construct Canonical LR (CLR) parse table using C language.
+Code:
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+#define MAX_RULES 20
+#define MAX_SYMBOLS 20
+#define MAX_STATES 50
+#define MAX_ITEMS 100
+// Structure to represent a production rule
+typedef struct {
+char lhs;
+char rhs[10];
+} Production;
+
+typedef struct {
+    char lhs;
+    char rhs[10];
+    int dotPosition;
+    char lookahead;
+    } LR1Item;
+    // Structure to represent a state
+    typedef struct {
+    LR1Item items[MAX_ITEMS];
+    int count;
+    } State;
+    // Global variables
+    Production grammar[MAX_RULES];
+    char terminals[MAX_SYMBOLS], nonTerminals[MAX_SYMBOLS];
+    int numRules = 0, numTerminals = 0, numNonTerminals = 0;
+    State states[MAX_STATES];
+    int numStates = 0;
+    int parseTable[MAX_STATES][MAX_SYMBOLS];
+    // Add a production rule
+    void addProduction(char lhs, char *rhs) {
+    grammar[numRules].lhs = lhs;
+    strcpy(grammar[numRules].rhs, rhs);
+    numRules++;
+    }
+    // Check if a symbol is a terminal
+    int isTerminal(char symbol) {
+    return islower(symbol) || strchr("()+*-$", symbol);
+    }
+    // Check if a symbol is a non-terminal
+    int isNonTerminal(char symbol) {
+    return isupper(symbol);
+    }
+    // Compute unique terminals and non-terminals
+    void computeSymbols() {
+    for (int i = 0; i < numRules; i++) {
+    if (!strchr(nonTerminals, grammar[i].lhs)) {
+    nonTerminals[numNonTerminals++] = grammar[i].lhs;
+}
+for (int j = 0; j < strlen(grammar[i].rhs); j++) {
+char symbol = grammar[i].rhs[j];
+if (isTerminal(symbol) && !strchr(terminals, symbol)) {
+terminals[numTerminals++] = symbol;
+}
+}
+}
+terminals[numTerminals++] = '$';
+}
+// Compute closure
+void closure(State *state) {
+int added = 1;
+while (added) {
+added = 0;
+for (int i = 0; i < state->count; i++) {
+LR1Item item = state->items[i];
+if (item.dotPosition < strlen(item.rhs)) {
+char nextSymbol = item.rhs[item.dotPosition];
+if (isNonTerminal(nextSymbol)) {
+for (int j = 0; j < numRules; j++) {
+if (grammar[j].lhs == nextSymbol) {
+LR1Item newItem = {grammar[j].lhs, "", 0,
+item.lookahead};
+strcpy(newItem.rhs, grammar[j].rhs);
+int exists = 0;
+for (int k = 0; k < state->count; k++) {
+if (state->items[k].lhs == newItem.lhs &&
+strcmp(state->items[k].rhs, newItem.rhs) == 0
+&&
+state->items[k].dotPosition ==
+newItem.dotPosition &&
+state->items[k].lookahead ==
+newItem.lookahead) {
+exists = 1;
+break;
+}
+}
+if (!exists) {
+state->items[state->count++] = newItem;
+added = 1;
+}
+}
+}
+}
+}
+}
+}
+}
+// Goto function
+int gotoFunction(State *state, char symbol, State *newState) {
+newState->count = 0;
+for (int i = 0; i < state->count; i++) {
+LR1Item item = state->items[i];
+if (item.dotPosition < strlen(item.rhs) && item.rhs[item.dotPosition] ==
+symbol) {
+LR1Item newItem = item;
+newItem.dotPosition++;
+newState->items[newState->count++] = newItem;
+}
+}
+closure(newState);
+return newState->count;
+}
+// Check if state exists
+int stateExists(State *newState) {
+for (int i = 0; i < numStates; i++) {
+if (states[i].count == newState->count) {
+int match = 1;
+for (int j = 0; j < states[i].count; j++) {
+if (states[i].items[j].lhs != newState->items[j].lhs ||
+strcmp(states[i].items[j].rhs, newState->items[j].rhs) != 0
+||
+states[i].items[j].dotPosition != newState->items[j].dotPosition ||
+states[i].items[j].lookahead != newState->items[j].lookahead)
+{
+match = 0;
+break;
+}
+}
+if (match) return i;
+}
+}
+return -1;
+}
+// Construct states
+void constructStates() {
+    State startState;
+    startState.count = 1;
+    startState.items[0].lhs = 'Z';
+    strcpy(startState.items[0].rhs, "S");
+    startState.items[0].dotPosition = 0;
+    startState.items[0].lookahead = '$';
+    closure(&startState);
+    states[numStates++] = startState;
+    for (int i = 0; i < numStates; i++) {
+    for (int j = 0; j < numTerminals + numNonTerminals; j++) {
+    char symbol = j < numTerminals ? terminals[j] : nonTerminals[j -
+    numTerminals];
+    State newState;
+    if (gotoFunction(&states[i], symbol, &newState) > 0) {
+    int existingIndex = stateExists(&newState);
+    if (existingIndex == -1) {
+    states[numStates] = newState;
+    numStates++;
+    }
+    }
+    }
+    }
+    }
+    // Construct parse table
+    void constructParseTable() {
+    memset(parseTable, -1, sizeof(parseTable));
+    for (int i = 0; i < numStates; i++) {
+    for (int j = 0; j < states[i].count; j++) {
+    LR1Item item = states[i].items[j];
+    if (item.dotPosition == strlen(item.rhs)) {
+    if (item.lhs == 'Z') {
+    parseTable[i][numTerminals - 1] = -2; // Accept
+    } else {
+    parseTable[i][numTerminals - 1] = j; // Reduce rule
+    }
+    } else {
+    char nextSymbol = item.rhs[item.dotPosition];
+    int nextState = stateExists(&states[i]);
+    if (nextState != -1) {
+        parseTable[i][nextState] = j;
+}
+}
+}
+}
+}
+// Display parse table
+void displayParseTable() {
+printf("\nCLR(1) Parsing Table:\n");
+printf("State\t");
+for (int i = 0; i < numTerminals; i++) {
+printf("%c\t", terminals[i]);
+}
+printf("\n");
+for (int i = 0; i < numStates; i++) {
+printf("%d\t", i);
+for (int j = 0; j < numTerminals; j++) {
+if (parseTable[i][j] == -2) {
+printf("ACC\t");
+} else if (parseTable[i][j] != -1) {
+printf("S%d\t", parseTable[i][j]);
+} else {
+printf("-\t");
+}
+}
+printf("\n");
+}
+}
+// Main function
+int main() {
+int n;
+printf("Enter number of productions: ");
+scanf("%d", &n);
+getchar();
+for (int i = 0; i < n; i++) {
+char lhs, rhs[10];
+printf("Production %d: ", i + 1);
+scanf("%c->%s", &lhs, rhs);
+getchar();
+addProduction(lhs, rhs);
+}
+computeSymbols();
+constructStates();
+constructParseTable();
+displayParseTable();
+return 0;
+}
+****************************************************************************************************************************************************************************************************************************************************************************
+b) Aim: Implement the LR parsing algorithm, get both parse table and input string are inputs. Use C language for implementation.
+Code:
+#include <iostream>
+#include <stack>
+#include <vector>
+#include <string>
+#include <map>
+#include <sstream>
+#include <set>
+#include <iomanip>
+#include <algorithm>
+
+using namespace std;
+
+struct TableEntry {
+    char action; // 's' for shift, 'r' for reduce, 'a' for accept
+    int number;  // state number or production number
+    TableEntry(char a = ' ', int n = 0) : action(a), number(n) {}
+};
+
+struct Production {
+    string lhs;
+    string rhs;
+    int rhsLength;
+
+    Production(string l, string r) : lhs(l), rhs(r) {
+        stringstream ss(r);
+        string token;
+        rhsLength = 0;
+        while (ss >> token) rhsLength++;
+    }
+};
+
+class CLRParser {
+private:
+    map<pair<int, string>, TableEntry> parsingTable;
+    vector<Production> productions;
+    stack<int> stateStack;
+    stack<string> symbolStack;
+    set<string> terminals;
+    set<string> nonTerminals;
+
+    string getStackContents() {
+        stack<int> stateTemp = stateStack;
+        stack<string> symbolTemp = symbolStack;
+
+        vector<int> states;
+        vector<string> symbols;
+
+        while (!stateTemp.empty()) {
+            states.push_back(stateTemp.top());
+            stateTemp.pop();
+        }
+        while (!symbolTemp.empty()) {
+            symbols.push_back(symbolTemp.top());
+            symbolTemp.pop();
+        }
+
+        reverse(states.begin(), states.end());
+        reverse(symbols.begin(), symbols.end());
+
+        string result = to_string(states[0]);
+
+        for (size_t i = 1; i < symbols.size(); i++) {
+            result += " " + symbols[i];
+            if (i < states.size()) {
+                result += " " + to_string(states[i]);
+            }
+        }
+        return result;
+    }
+
+    string getRemainingInput(const vector<string>& tokens, int currentPos) {
+        string result;
+        for (int i = currentPos; i < tokens.size(); i++) {
+            result += tokens[i] + " ";
+        }
+        result += "$";
+        return result;
+    }
+
+    void printTableHeader() {
+        cout << setfill('-') << setw(80) << "-" << endl;
+        cout << setfill(' ');
+        cout << left << setw(30) << "Stack"
+             << left << setw(30) << "Input"
+             << left << setw(20) << "Action" << endl;
+        cout << setfill('-') << setw(80) << "-" << endl;
+        cout << setfill(' ');
+    }
+
+    void printTableRow(const string& stack, const string& input, const string& action) {
+        cout << left << setw(30) << stack
+             << left << setw(30) << input
+             << left << setw(20) << action << endl;
+    }
+
+    vector<string> tokenize(const string& input) {
+        vector<string> tokens;
+        stringstream ss(input);
+        string token;
+        while (ss >> token) {
+            tokens.push_back(token);
+        }
+        return tokens;
+    }
+
+public:
+    void inputGrammar() {
+        cout << "Enter number of productions: ";
+        int n;
+        cin >> n;
+        cin.ignore();
+
+        cout << "Enter productions in format 'LHS -> RHS' (use spaces between symbols)\n";
+        cout << "Example: S -> C C\n";
+
+        for (int i = 0; i < n; i++) {
+            string line;
+            getline(cin, line);
+            size_t arrow = line.find("->");
+            if (arrow != string::npos) {
+                string lhs = line.substr(0, arrow);
+                string rhs = line.substr(arrow + 2);
+
+                // Trim whitespace
+                lhs.erase(lhs.find_last_not_of(" \t") + 1);
+                rhs.erase(0, rhs.find_first_not_of(" \t"));
+
+                productions.push_back(Production(lhs, rhs));
+                nonTerminals.insert(lhs);
+
+                stringstream ss(rhs);
+                string token;
+                while (ss >> token) {
+                    if (nonTerminals.find(token) == nonTerminals.end()) {
+                        terminals.insert(token);
+                    }
+                }
+            }
+        }
+    }
+
+    void inputParsingTable() {
+        cout << "Enter number of states: ";
+        int states;
+        cin >> states;
+        cin.ignore();
+
+        cout << "Enter parsing table entries in the following format:\n";
+        cout << "For terminals: state symbol s/r number\n";
+        cout << "For non-terminals: state symbol number (GOTO entry)\n";
+        cout << "Example: 0 c s 3  or  0 S 1\n";
+        cout << "Enter 'done' when finished\n";
+
+        while (true) {
+            string line;
+            getline(cin, line);
+            if (line == "done") break;
+
+            stringstream ss(line);
+            int state;
+            string symbol;
+            string actionOrNumber;
+
+            if (ss >> state >> symbol >> actionOrNumber) {
+                if (nonTerminals.find(symbol) != nonTerminals.end()) {
+                    int gotoState = stoi(actionOrNumber);
+                    parsingTable[{state, symbol}] = TableEntry('g', gotoState);
+                } else {
+                    int number;
+                    if (ss >> number) {
+                        char action = actionOrNumber[0];
+                        parsingTable[{state, symbol}] = TableEntry(action, number);
+                    }
+                }
+            }
+        }
+    }
+
+    bool parse(const string& input) {
+        while (!stateStack.empty()) stateStack.pop();
+        while (!symbolStack.empty()) symbolStack.pop();
+
+        stateStack.push(0);
+        symbolStack.push("$");
+
+        vector<string> tokens = tokenize(input);
+        int currentToken = 0;
+
+        printTableHeader();
+
+        while (true) {
+            int currentState = stateStack.top();
+            string currentSymbol = (currentToken < tokens.size()) ? tokens[currentToken] : "$";
+
+            string stackContent = getStackContents();
+            string remainingInput = getRemainingInput(tokens, currentToken);
+
+            auto entry = parsingTable.find({currentState, currentSymbol});
+            if (entry == parsingTable.end()) {
+                printTableRow(stackContent, remainingInput, "Error: No action defined");
+                return false;
+            }
+
+            TableEntry action = entry->second;
+
+            if (action.action == 's') {
+                printTableRow(stackContent, remainingInput, "Shift " + to_string(action.number));
+                stateStack.push(action.number);
+                symbolStack.push(currentSymbol);
+                currentToken++;
+            } else if (action.action == 'r') {
+                Production prod = productions[action.number - 1];
+                printTableRow(stackContent, remainingInput, "Reduce by " + prod.lhs + " -> " + prod.rhs);
+
+                for (int i = 0; i < prod.rhsLength; i++) {
+                    stateStack.pop();
+                    symbolStack.pop();
+                }
+                symbolStack.push(prod.lhs);
+
+                int gotoState = stateStack.top();
+                auto gotoEntry = parsingTable.find({gotoState, prod.lhs});
+                if (gotoEntry == parsingTable.end()) {
+                    printTableRow(getStackContents(), remainingInput, "Error: No goto defined");
+                    return false;
+                }
+                stateStack.push(gotoEntry->second.number);
+            } else if (action.action == 'a') {
+                printTableRow(stackContent, remainingInput, "Accept");
+                return true;
+            }
+        }
+        return false;
+    }
+};
+
+int main() {
+    CLRParser parser;
+    parser.inputGrammar();
+    parser.inputParsingTable();
+
+    cout << "Enter input string to parse (tokens space-separated): ";
+    string input;
+    getline(cin, input);
+
+    if (parser.parse(input)) {
+        cout << "\nParsing completed successfully!" << endl;
+    } else {
+        cout << "\nParsing failed!" << endl;
+    }
+
+    return 0;
+}
+
+Lexer file:
+%{
+#include "new.tab.h" // Corrected to match Yacc output file
+#include <stdlib.h>   // Needed for `atoi`
+%}
+
+%%
+
+[0-9]+     { yylval = atoi(yytext); return NUMBER; }
+"+"        { return PLUS; }
+"-"        { return MINUS; }
+"*"        { return TIMES; }
+"/"|"÷"    { return DIVIDE; }
+\n         { return EOL; }
+[ \t]      { /* Ignore whitespace */ }
+.          { return yytext[0]; } // Return unrecognized characters as-is
+
+%%
+
+int yywrap() {
+    return 1; // Indicate end of input
+}
+
+
+Parser file:
+%{
+#include <stdio.h>
+#include <stdlib.h> // Needed for exit()
+int yylex();
+void yyerror(const char *s);
+%}
+
+%token NUMBER PLUS MINUS TIMES DIVIDE EOL
+
+%left PLUS MINUS
+%left TIMES DIVIDE
+
+%start statements
+
+%%
+
+statements : statements statement
+           | statement
+           ;
+
+statement  : expression EOL { printf("= %d\n", $1); }
+           ;
+
+expression : NUMBER  { $$ = $1; printf("number: %d\n", $$); }
+          | expression TIMES expression { $$ = $1 * $3; printf("*: %d\n", $$); }
+          | expression PLUS expression { $$ = $1 + $3; printf("+: %d\n", $$); }
+          ;
+
+%%
+
+void yyerror(const char *s) { 
+    fprintf(stderr, "Error: %s\n", s);
+}
+
+int main() {
+    yyparse();
+    return 0; 
+}
+
+%{
+#include <stdio.h>
+#include <stdlib.h> // Needed for exit()
+int yylex();
+void yyerror(const char *s);
+%}
+
+%token NUMBER PLUS MINUS TIMES DIVIDE EOL
+
+%left PLUS MINUS
+%left TIMES DIVIDE
+
+%start statements
+
+%%
+
+statements : statements statement
+           | statement
+           ;
+
+statement  : expression EOL { printf("= %d\n", $1); }
+           ;
+
+expression : NUMBER  { $$ = $1; printf("number: %d\n", $$); }
+          | expression TIMES expression { $$ = $1 * $3; printf("*: %d\n", $$); }
+          | expression PLUS expression { $$ = $1 + $3; printf("+: %d\n", $$); }
+          ;
+
+%%
+
+void yyerror(const char *s) { 
+    fprintf(stderr, "Error: %s\n", s);
+}
+
+int main() {
+    yyparse();
+    return 0; 
+}
+Implementation of Abstract syntax tree – infix to postfix using the LEX
+and YACC tools.
+.l code 
+%{
+#include "new.tab.h"  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+%}
+
+%%
+
+[0-9]+        { yylval.str = strdup(yytext); return NUMBER; }
+[+\-*/()]     { return yytext[0]; }
+[ \t]         { /* Ignore whitespace */ }
+\n            { return 0; }
+.             { printf("Invalid character: %s\n", yytext); }
+
+%%
+
+int yywrap() {
+  return 1;
+}
+
+.y code
+ %{
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+typedef struct Node {
+ char *value;
+ struct Node *left, *right;
+} Node;
+Node *createNode(char *value, Node *left, Node *right);
+void printPostfix(Node *root);
+void freeTree(Node *root);
+int yylex();
+void yyerror(const char *s);
+Node *root = NULL; //
+%}
+%union {
+ char *str;
+ struct Node *node;
+}
+%token <str> NUMBER
+%type <node> expr
+%left '+' '-'
+%left '*' '/'
+%right UMINUS
+%%
+input: expr { root = $1; }
+ ;
+expr: expr '+' expr { $$ = createNode("+", $1, $3); }
+ | expr '-' expr { $$ = createNode("-", $1, $3); }
+ | expr '*' expr { $$ = createNode("*", $1, $3); }
+ | expr '/' expr { $$ = createNode("/", $1, $3); }
+ | '-' expr %prec UMINUS { $$ = createNode("NEG", $2, NULL); }
+ | '(' expr ')' { $$ = $2; }
+ | NUMBER { $$ = createNode($1, NULL, NULL); }
+ ;
+%%
+Node *createNode(char *value, Node *left, Node *right) {
+ printf("Creating node: %s\n", value);
+ Node *newNode = (Node *)malloc(sizeof(Node));
+ newNode->value = strdup(value);
+ newNode->left = left;
+ newNode->right = right;
+ return newNode;
+}
+void printPostfix(Node *root) {
+ if (root == NULL) {
+ return;
+ }
+ printPostfix(root->left);
+ printPostfix(root->right);
+ printf("%s ", root->value);
+}
+void freeTree(Node *root) {
+ if (root == NULL) return;
+ freeTree(root->left);
+ freeTree(root->right);
+ free(root->value);
+ free(root);
+}
+int main() {
+ printf("Enter an infix expression: ");
+ fflush(stdout);
+ if (yyparse() == 0) {
+ printf("Parsing successful!\n");
+ } else {
+ printf("Parsing failed!\n");
+ return 1;
+ }
+ if (root == NULL) {
+ printf("Error: AST root is NULL!\n");
+ return 1;
+ }
+ printf("Postfix notation: ");
+ printPostfix(root);
+ printf("\n");
+ freeTree(root);
+ return 0;
+}
+void yyerror(const char *s) {
+ fprintf(stderr, "Error: %s\n", s);
+}
+****************************************************************************************************************************************************************************************************************************************************************************
+Q3. Part A
+Pattern matching program for grammar L(G) = {a^nb^m | n != m}
+Lexer FIle:
+%{
+#include "new.tab.h"
+%}
+%%
+a+ { yylval.str = strdup(yytext); return A_SEQ; }
+b+ { yylval.str = strdup(yytext); return B_SEQ; }
+\n { return 0; }
+. { printf("Invalid character: %s\n", yytext); }
+%%
+int yywrap() {
+ return 1;
+}
+
+.y code:
+%{
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+int yylex();
+void yyerror(const char *s);
+%}
+%union {
+ char *str;
+}
+%token <str> A_SEQ B_SEQ
+%%
+input: A_SEQ B_SEQ {
+ int count_a = strlen($1);
+ int count_b = strlen($2);
+ if (count_a != count_b) {
+ printf("Valid: %d 'a's and %d 'b's (m ≠ n)\n", count_a, count_b);
+ } else {
+ printf("Invalid: m = n (%d)\n", count_a);
+ }
+}
+ ;
+%%
+int main() {
+ printf("Enter a string (e.g., aaabb): ");
+ yyparse();
+ return 0;
+}
+void yyerror(const char *s) {
+ printf("Error: %s\n", s);
+}
+****************************************************************************************************************************************************************************************************************************************************************************
+B) L(G) = {(ab)^n (bba)^m (bba)^p | m , n , p >= 0 }
+Lex:
+%{
+#include "new.tab.h"
+%}
+
+%%
+ab      { return AB; }
+bbaa    { return BBAA; }
+bba     { return BBA; }
+ba      { return BA; }
+[ \t\n] ;              // Ignore whitespace
+.       { return INVALID; }
+%%
+int yywrap() { return 1; }
+
+y code
+%{
+#include <stdio.h>
+#include <stdlib.h>
+
+int count1 = 0, count2 = 0;
+void yyerror(const char *s);
+int yylex();
+%}
+
+%token AB BBAA BBA BA INVALID
+
+%start S
+
+%%
+
+S : AB part BBA tail {
+      if (count1 == count2)
+         printf("Valid string in L(G)\n");
+      else
+         yyerror("Invalid: Number of (bbaa)^n and (ba)^n must match.");
+      count1 = count2 = 0;
+  }
+  ;
+
+part : /* empty */ 
+     | part BBAA { count1++; }
+     ;
+
+tail : /* empty */
+     | tail BA { count2++; }
+     ;
+
+%%
+
+void yyerror(const char *s) {
+    fprintf(stderr, "%s\n", s);
+    exit(1);
+}
+
+int main() {
+    printf("Enter a string: ");
+    yyparse();
+    return 0;
+}
+Implementation of three address codes for a simple program using LEX and YACC tools.
+Lex:
+%{
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "y.tab.h"
+
+%}
+
+%%
+
+[0-9]+     { yylval.str = strdup(yytext); return NUMBER; }
+[a-zA-Z_][a-zA-Z0-9_]* { yylval.str = strdup(yytext); return ID; }
+[+\-*/=()] { return yytext[0]; }
+[ \t]      { /* Ignore whitespace */ }
+\n         { return '\n'; }
+.          { printf("Invalid character: %s\n", yytext); }
+
+%%
+
+int yywrap() {
+    return 1;
+}
+Y:
+%{
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+extern int yylex();
+void yyerror(const char *s);
+
+typedef struct Node {
+    char *code;
+    char *place;
+} Node;
+
+Node *createNode(char *code, char *place);
+void printTAC(Node *root);
+
+int tempVarCount = 0;  // Counter for temporary variables
+%}
+
+%union {
+    char *str;
+    struct Node *node;
+}
+
+%token <str> ID NUMBER
+%type <node> expr stmt
+
+%left '+' '-'
+%left '*' '/'
+%right '='
+
+%%
+
+program: stmt { printTAC($1); }
+    ;
+
+stmt: ID '=' expr {
+    char temp[10];
+    sprintf(temp, "t%d", tempVarCount++);
+    printf("%s = %s\n", temp, $3->place);
+    printf("%s = %s\n", $1, temp);
+    $$ = createNode("", strdup($1));
+}
+    ;
+
+expr: expr '+' expr { 
+    char temp[10];
+    sprintf(temp, "t%d", tempVarCount++);
+    printf("%s = %s + %s\n", temp, $1->place, $3->place);
+    $$ = createNode("", strdup(temp));
+}
+    | expr '-' expr { 
+    char temp[10];
+    sprintf(temp, "t%d", tempVarCount++);
+    printf("%s = %s - %s\n", temp, $1->place, $3->place);
+    $$ = createNode("", strdup(temp));
+}
+    | expr '*' expr { 
+    char temp[10];
+    sprintf(temp, "t%d", tempVarCount++);
+    printf("%s = %s * %s\n", temp, $1->place, $3->place);
+    $$ = createNode("", strdup(temp));
+}
+    | expr '/' expr { 
+    char temp[10];
+    sprintf(temp, "t%d", tempVarCount++);
+    printf("%s = %s / %s\n", temp, $1->place, $3->place);
+    $$ = createNode("", strdup(temp));
+}
+    | '(' expr ')' { $$ = $2; }
+    | NUMBER { $$ = createNode("", strdup($1)); }
+    | ID { $$ = createNode("", strdup($1)); }
+    ;
+
+%%
+
+Node *createNode(char *code, char *place) {
+    Node *newNode = (Node *)malloc(sizeof(Node));
+    newNode->code = strdup(code);
+    newNode->place = strdup(place);
+    return newNode;
+}
+
+void printTAC(Node *root) {
+    printf("Three Address Code Generated:\n");
+}
+
+int main() {
+    printf("Enter a simple assignment expression:\n");
+    yyparse();
+    return 0;
+}
+
+void yyerror(const char *s) {
+    printf("Error: %s\n", s);
+}
+------------------------------------
+Implement simple code optimization techniques (Constant folding, Strength reduction and Algebraic transformation)
+lex:
+%{
+#include "y.tab.h"
+#include <stdlib.h>
+#include <string.h>
+%}
+ 
+%%
+ 
+[0-9]+     { yylval.str = strdup(yytext); return NUMBER; }
+[a-zA-Z_][a-zA-Z0-9_]* { yylval.str = strdup(yytext); return ID; }
+[+\-*/=()] { return yytext[0]; }
+[ \t]      { /* Ignore whitespace */ }
+\n         { return 0; }
+.          { printf("Invalid character: %s\n", yytext); }
+ 
+%%
+ 
+int yywrap() {
+    return 1;
+}
+y:
+%{
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>  // Required for isdigit()
+ 
+int yylex();
+void yyerror(const char *s);
+ 
+typedef struct Node {
+    char *code;
+} Node;
+ 
+Node *createNode(char *code);
+ 
+%}
+ 
+%union {
+    char *str;
+    struct Node *node;
+}
+ 
+%token <str> ID NUMBER
+%type <node> expr stmt
+ 
+%left '+' '-'
+%left '*' '/'
+%right '='
+ 
+%%
+ 
+program: stmt { printf("\nOptimized Code: %s\n", $1->code); }
+    ;
+ 
+stmt: ID '=' expr {
+    char buffer[100];
+    sprintf(buffer, "%s = %s", $1, $3->code);
+    $$ = createNode(buffer);
+}
+    ;
+ 
+expr: expr '+' expr { 
+    char buffer[100];
+ 
+    // Constant Folding
+    if (isdigit($1->code[0]) && isdigit($3->code[0])) {
+        sprintf(buffer, "%d", atoi($1->code) + atoi($3->code));
+    }
+    // Algebraic Transformations
+    else if (strcmp($3->code, "0") == 0) {
+        sprintf(buffer, "%s", $1->code);
+    }
+    else if (strcmp($1->code, "0") == 0) {
+        sprintf(buffer, "%s", $3->code);
+    }
+    else {
+        sprintf(buffer, "%s + %s", $1->code, $3->code);
+    }
+    $$ = createNode(buffer);
+}
+    | expr '-' expr { 
+    char buffer[100];
+ 
+    if (isdigit($1->code[0]) && isdigit($3->code[0])) {
+        sprintf(buffer, "%d", atoi($1->code) - atoi($3->code));
+    }
+    else if (strcmp($3->code, "0") == 0) {
+        sprintf(buffer, "%s", $1->code);
+    }
+    else {
+        sprintf(buffer, "%s - %s", $1->code, $3->code);
+    }
+    $$ = createNode(buffer);
+}
+    | expr '*' expr { 
+    char buffer[100];
+ 
+    if (isdigit($1->code[0]) && isdigit($3->code[0])) {
+        sprintf(buffer, "%d", atoi($1->code) * atoi($3->code));
+    }
+    // Algebraic Transformations
+    else if (strcmp($3->code, "1") == 0) {
+        sprintf(buffer, "%s", $1->code);
+    }
+    else if (strcmp($1->code, "1") == 0) {
+        sprintf(buffer, "%s", $3->code);
+    }
+    else if (strcmp($1->code, "0") == 0 || strcmp($3->code, "0") == 0) {
+        sprintf(buffer, "0");
+    }
+    // Strength Reduction (x * 2 → x + x)
+    else if (strcmp($3->code, "2") == 0) {
+        sprintf(buffer, "%s + %s", $1->code, $1->code);
+    }
+    else {
+        sprintf(buffer, "%s * %s", $1->code, $3->code);
+    }
+    $$ = createNode(buffer);
+}
+    | expr '/' expr { 
+    char buffer[100];
+ 
+    if (isdigit($1->code[0]) && isdigit($3->code[0]) && atoi($3->code) != 0) {
+        sprintf(buffer, "%d", atoi($1->code) / atoi($3->code));
+    }
+    // Algebraic Transformations
+    else if (strcmp($3->code, "1") == 0) {
+        sprintf(buffer, "%s", $1->code);
+    }
+    else {
+        sprintf(buffer, "%s / %s", $1->code, $3->code);
+    }
+    $$ = createNode(buffer);
+}
+    | '(' expr ')' { $$ = $2; }
+    | NUMBER { $$ = createNode($1); }
+    | ID { $$ = createNode($1); }
+    ;
+ 
+%%
+ 
+Node *createNode(char *code) {
+    Node *newNode = (Node *)malloc(sizeof(Node));
+    newNode->code = strdup(code);
+    return newNode;
+}
+ 
+int main() {
+    printf("Enter an expression: ");
+    yyparse();
+    return 0;
+}
+ 
+void yyerror(const char *s) {
+    printf("Error: %s\n", s);
+}
+----------------------------------------------------------------------------------
+Implement Back-End of the compiler for which three address code is given as input and the 8086 assembly language is produced as output
+c code:
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+ 
+void generateAssembly(char *tacLine) {
+char result[10], op1[10], op2[10], operator;
+ 
+if (sscanf(tacLine, "%s = %s %c %s", result, op1, &operator, op2) == 4) {
+printf("MOV AX, %s\n", op1);
+ 
+switch (operator) {
+case '+': printf("ADD AX, %s\n", op2); break;
+case '-': printf("SUB AX, %s\n", op2); break;
+case '*': printf("MUL %s\n", op2); break;
+case '/': printf("DIV %s\n", op2); break;
+}
+ 
+printf("MOV %s, AX\n", result);
+}
+else if (sscanf(tacLine, "%s = %s", result, op1) == 2) {
+printf("MOV %s, %s\n", result, op1);
+}
+}
+ 
+int main() {
+FILE *file = fopen("my.txt", "r");
+if (!file) {
+printf("Error opening file!\n");
+return 1;
+}
+ 
+char line[50];
+printf("\nGenerated 8086 Assembly Code:\n");
+printf("--------------------------------\n");
+ 
+while (fgets(line, sizeof(line), file)) {
+line[strcspn(line, "\n")] = 0;
+generateAssembly(line);
+}
+ 
+fclose(file);
+return 0;
+}
+txt:
+t1 = a + b
+t2 = t1 * c
+t3 = t2 - d
+t4 = t3 / e
